@@ -37,11 +37,12 @@ interface WorkflowRuleFromAPI {
 
 interface WorkflowListProps {
   filterActive?: boolean;
-  // We will add filterTriggerId?: string | null;
-  // and filterActionId?: string | null; later
+  searchTerm?: string;
+  filterType?: string; // 'all', 'immediate', 'scheduled'
+  filterTrigger?: string; // 'all', or specific trigger name/id
 }
 
-export default function WorkflowList({ filterActive }: WorkflowListProps) {
+export default function WorkflowList({ filterActive, searchTerm, filterType, filterTrigger }: WorkflowListProps) {
   const [allFetchedWorkflows, setAllFetchedWorkflows] = useState<WorkflowRuleFromAPI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,12 +141,38 @@ export default function WorkflowList({ filterActive }: WorkflowListProps) {
     }
   };
 
-  // Client-side filtering for now
+  // Client-side filtering
   const filteredWorkflows = allFetchedWorkflows.filter(workflow => {
     if (filterActive !== undefined && workflow.is_active !== filterActive) {
       return false;
     }
-    // Add more filters here for triggerId, actionId when passed as props
+
+    // Filter by search term (name or description)
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const inName = workflow.name.toLowerCase().includes(lowerSearchTerm);
+      const inDescription = workflow.description?.toLowerCase().includes(lowerSearchTerm) || false;
+      if (!inName && !inDescription) {
+        return false;
+      }
+    }
+
+    // Filter by workflow type
+    if (filterType && filterType !== "all" && workflow.rule_type !== filterType) {
+      return false;
+    }
+
+    // Filter by trigger name (adjust if using IDs later)
+    // For simplicity, assuming filterTrigger holds the trigger name if not 'all'
+    if (filterTrigger && filterTrigger !== "all") {
+      if (!workflow.trigger.name.toLowerCase().includes(filterTrigger.toLowerCase())) {
+        // This might need to be more robust if trigger names aren't unique or if you pass IDs
+        // For now, it's a case-insensitive substring match with the trigger name.
+        // If filterTrigger is an ID, you'd compare workflow.trigger.id instead.
+        return false;
+      }
+    }
+
     return true;
   });
 
