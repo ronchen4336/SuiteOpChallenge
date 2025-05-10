@@ -12,8 +12,8 @@ class ActionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class WorkflowRuleSerializer(serializers.ModelSerializer):
-    trigger = TriggerSerializer(read_only=True) # Display nested trigger info on read
-    action = ActionSerializer(read_only=True)  # Display nested action info on read
+    trigger = TriggerSerializer(read_only=True) 
+    action = ActionSerializer(read_only=True)  
     trigger_id = serializers.PrimaryKeyRelatedField(
         queryset=Trigger.objects.all(), source='trigger', write_only=True
     )
@@ -26,7 +26,7 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'trigger', 'action', 
             'rule_type', 'delay_time', 'delay_unit', 'is_active',
-            'trigger_id', 'action_id', # For write operations
+            'trigger_id', 'action_id',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -45,7 +45,6 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Delay time must be a positive integer.")
         elif rule_type == 'immediate':
             if delay_time is not None or delay_unit is not None:
-                # Optionally clear them or raise error. Clearing might be more user-friendly.
                 data['delay_time'] = None
                 data['delay_unit'] = None
         return data 

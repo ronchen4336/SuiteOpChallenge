@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Zap, Clock, Sparkles, ArrowRight, Save } from "lucide-react"
 import WorkflowPreview from "@/components/workflow-preview"
+import { toast } from "sonner"
 
 // Define interfaces for the fetched data
 interface ApiItem {
@@ -27,17 +28,18 @@ export default function CreateWorkflow() {
   const [generatedWorkflow, setGeneratedWorkflow] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("ai")
   const [workflowType, setWorkflowType] = useState("immediate")
+  const [isActive, setIsActive] = useState(true)
 
   // State for fetched triggers and actions
   const [dbTriggers, setDbTriggers] = useState<ApiItem[]>([])
   const [dbActions, setDbActions] = useState<ApiItem[]>([])
   // Optional: loading and error states
-  const [isLoadingData, setIsLoadingData] = useState(true); 
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [errorData, setErrorData] = useState<string | null>(null);
 
-  // Manual configuration state - selectedTrigger/Action will now store IDs
-  const [selectedTrigger, setSelectedTrigger] = useState<string>("") // Store ID as string
-  const [selectedAction, setSelectedAction] = useState<string>("")   // Store ID as string
+  // Manual configuration state
+  const [selectedTrigger, setSelectedTrigger] = useState<string>("")
+  const [selectedAction, setSelectedAction] = useState<string>("")
   const [delayTime, setDelayTime] = useState("15")
   const [delayUnit, setDelayUnit] = useState("minutes")
 
@@ -81,7 +83,6 @@ export default function CreateWorkflow() {
       const mockGeneratedWorkflow = {
         name: aiPrompt.split(" ").slice(0, 4).join(" "),
         description: aiPrompt,
-        // For mock, find first trigger/action and use its ID as string
         trigger: dbTriggers.length > 0 ? String(dbTriggers[0].id) : "", 
         action: dbActions.length > 0 ? String(dbActions[0].id) : "",
         type: workflowType,
@@ -96,17 +97,69 @@ export default function CreateWorkflow() {
       setGeneratedWorkflow(mockGeneratedWorkflow)
       setWorkflowName(mockGeneratedWorkflow.name)
       setWorkflowDescription(mockGeneratedWorkflow.description)
-      // When AI generates, it should suggest IDs that are strings
       setSelectedTrigger(mockGeneratedWorkflow.trigger ? String(mockGeneratedWorkflow.trigger) : "")
       setSelectedAction(mockGeneratedWorkflow.action ? String(mockGeneratedWorkflow.action) : "")
       setIsGenerating(false)
     }, 1500)
   }
 
-  const handleSaveWorkflow = () => {
-    // In a real app, this would save to backend
-    alert("Workflow saved successfully!")
-    // Then redirect to workflows list
+  const handleSaveWorkflow = async () => {
+    if (!workflowName || !selectedTrigger || !selectedAction) {
+      toast.error("Please fill in all required fields: Name, Trigger, and Action.");
+      return;
+    }
+
+    const payload: any = {
+      name: workflowName,
+      description: workflowDescription,
+      trigger_id: parseInt(selectedTrigger),
+      action_id: parseInt(selectedAction),
+      rule_type: workflowType,
+      is_active: isActive,
+    };
+
+    if (workflowType === "scheduled") {
+      const delay = parseInt(delayTime, 10);
+      if (isNaN(delay) || delay <= 0) {
+        toast.error("Please enter a valid positive number for delay time.");
+        return;
+      }
+      payload.delay_time = delay;
+      payload.delay_unit = delayUnit;
+    } else {
+      payload.delay_time = null;
+      payload.delay_unit = null;
+    }
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/rules/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const newWorkflow = await response.json();
+        toast.success(`Workflow "${newWorkflow.name}" saved successfully!`);
+        setWorkflowName("");
+        setWorkflowDescription("");
+        setSelectedTrigger("");
+        setSelectedAction("");
+        setWorkflowType("immediate");
+        setDelayTime("15");
+        setDelayUnit("minutes");
+        setIsActive(true);
+      } else {
+        const errorData = await response.json().catch(() => ({ detail: "An unknown error occurred." }));
+        toast.error(`Failed to save workflow: ${errorData.detail || response.statusText}`);
+        console.error("Error saving workflow:", errorData);
+      }
+    } catch (error) {
+      toast.error("An error occurred while saving the workflow. Please check your connection.");
+      console.error("Network error:", error);
+    }
   }
 
   // Display loading or error states if necessary
@@ -266,7 +319,7 @@ export default function CreateWorkflow() {
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       {dbTriggers.map((trigger) => (
-                        <SelectItem key={trigger.id} value={String(trigger.id)}> {/* Value as string */}
+                        <SelectItem key={trigger.id} value={String(trigger.id)}>
                           {trigger.name}
                         </SelectItem>
                       ))}
@@ -282,7 +335,7 @@ export default function CreateWorkflow() {
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       {dbActions.map((action) => (
-                        <SelectItem key={action.id} value={String(action.id)}> {/* Value as string */}
+                        <SelectItem key={action.id} value={String(action.id)}>
                           {action.name}
                         </SelectItem>
                       ))}
@@ -316,7 +369,7 @@ export default function CreateWorkflow() {
                 )}
 
                 <div className="flex items-center space-x-2">
-                  <Switch id="active" defaultChecked />
+                  <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
                   <Label htmlFor="active">Activate workflow immediately</Label>
                 </div>
               </CardContent>
