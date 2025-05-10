@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,6 +12,13 @@ import { Switch } from "@/components/ui/switch"
 import { Zap, Clock, Sparkles, ArrowRight, Save } from "lucide-react"
 import WorkflowPreview from "@/components/workflow-preview"
 
+// Define interfaces for the fetched data
+interface ApiItem {
+  id: number | string; // ID can be number or string from API
+  name: string;
+  description?: string;
+}
+
 export default function CreateWorkflow() {
   const [workflowName, setWorkflowName] = useState("")
   const [workflowDescription, setWorkflowDescription] = useState("")
@@ -21,56 +28,77 @@ export default function CreateWorkflow() {
   const [activeTab, setActiveTab] = useState("ai")
   const [workflowType, setWorkflowType] = useState("immediate")
 
-  // Manual configuration state
-  const [selectedTrigger, setSelectedTrigger] = useState("")
-  const [selectedAction, setSelectedAction] = useState("")
+  // State for fetched triggers and actions
+  const [dbTriggers, setDbTriggers] = useState<ApiItem[]>([])
+  const [dbActions, setDbActions] = useState<ApiItem[]>([])
+  // Optional: loading and error states
+  const [isLoadingData, setIsLoadingData] = useState(true); 
+  const [errorData, setErrorData] = useState<string | null>(null);
+
+  // Manual configuration state - selectedTrigger/Action will now store IDs
+  const [selectedTrigger, setSelectedTrigger] = useState<string>("") // Store ID as string
+  const [selectedAction, setSelectedAction] = useState<string>("")   // Store ID as string
   const [delayTime, setDelayTime] = useState("15")
   const [delayUnit, setDelayUnit] = useState("minutes")
 
-  const triggers = [
-    "Guest checks in",
-    "Guest checks out",
-    "Cleaning completed",
-    "Maintenance issue reported",
-    "Booking canceled",
-    "Inventory running low",
-  ]
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoadingData(true);
+      setErrorData(null);
+      try {
+        const [triggersResponse, actionsResponse] = await Promise.all([
+          fetch('http://127.0.0.1:8000/api/triggers/'),
+          fetch('http://127.0.0.1:8000/api/actions/') 
+        ]);
 
-  const actions = [
-    "Send Email",
-    "Send Slack Notification",
-    "Send Native Notification",
-    "Create Task",
-    "Turn Device On/Off",
-  ]
+        if (!triggersResponse.ok || !actionsResponse.ok) {
+          let errorMsg = "Failed to fetch data:";
+          if (!triggersResponse.ok) errorMsg += ` Triggers status: ${triggersResponse.status}`;
+          if (!actionsResponse.ok) errorMsg += ` Actions status: ${actionsResponse.status}`;
+          throw new Error(errorMsg);
+        }
+
+        const triggersData = await triggersResponse.json();
+        const actionsData = await actionsResponse.json();
+
+        setDbTriggers(triggersData);
+        setDbActions(actionsData);
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setErrorData(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    fetchData();
+  }, []); // Empty dependency array means this runs once on mount
 
   const handleGenerateWorkflow = () => {
     setIsGenerating(true)
-
-    // Simulate AI generation
     setTimeout(() => {
-      // This would be replaced with actual AI API call
       const mockGeneratedWorkflow = {
         name: aiPrompt.split(" ").slice(0, 4).join(" "),
         description: aiPrompt,
-        trigger: "Guest checks in",
-        action: "Send Email",
+        // For mock, find first trigger/action and use its ID as string
+        trigger: dbTriggers.length > 0 ? String(dbTriggers[0].id) : "", 
+        action: dbActions.length > 0 ? String(dbActions[0].id) : "",
         type: workflowType,
         delay:
           workflowType === "scheduled"
             ? {
-                time: 15,
-                unit: "minutes",
+                time: parseInt(delayTime, 10),
+                unit: delayUnit,
               }
             : null,
       }
-
       setGeneratedWorkflow(mockGeneratedWorkflow)
       setWorkflowName(mockGeneratedWorkflow.name)
       setWorkflowDescription(mockGeneratedWorkflow.description)
-      setSelectedTrigger(mockGeneratedWorkflow.trigger)
-      setSelectedAction(mockGeneratedWorkflow.action)
-
+      // When AI generates, it should suggest IDs that are strings
+      setSelectedTrigger(mockGeneratedWorkflow.trigger ? String(mockGeneratedWorkflow.trigger) : "")
+      setSelectedAction(mockGeneratedWorkflow.action ? String(mockGeneratedWorkflow.action) : "")
       setIsGenerating(false)
     }, 1500)
   }
@@ -80,6 +108,10 @@ export default function CreateWorkflow() {
     alert("Workflow saved successfully!")
     // Then redirect to workflows list
   }
+
+  // Display loading or error states if necessary
+  if (isLoadingData) return <p className="text-center p-8">Loading workflow options...</p>;
+  if (errorData) return <p className="text-center p-8 text-red-600">Error loading data: {errorData}</p>;
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -160,7 +192,14 @@ export default function CreateWorkflow() {
 
             {generatedWorkflow && (
               <div className="mt-8">
-                <WorkflowPreview workflow={generatedWorkflow} onEdit={() => setActiveTab("manual")} />
+                <WorkflowPreview 
+                  workflow={{
+                    ...generatedWorkflow,
+                    trigger: dbTriggers.find(t => String(t.id) === String(generatedWorkflow.trigger))?.name || String(generatedWorkflow.trigger),
+                    action: dbActions.find(a => String(a.id) === String(generatedWorkflow.action))?.name || String(generatedWorkflow.action),
+                  }}
+                  onEdit={() => setActiveTab("manual")} 
+                />
               </div>
             )}
           </TabsContent>
@@ -226,9 +265,9 @@ export default function CreateWorkflow() {
                       <SelectValue placeholder="Select a trigger" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
-                      {triggers.map((trigger) => (
-                        <SelectItem key={trigger} value={trigger}>
-                          {trigger}
+                      {dbTriggers.map((trigger) => (
+                        <SelectItem key={trigger.id} value={String(trigger.id)}> {/* Value as string */}
+                          {trigger.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -242,9 +281,9 @@ export default function CreateWorkflow() {
                       <SelectValue placeholder="Select an action" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
-                      {actions.map((action) => (
-                        <SelectItem key={action} value={action}>
-                          {action}
+                      {dbActions.map((action) => (
+                        <SelectItem key={action.id} value={String(action.id)}> {/* Value as string */}
+                          {action.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
