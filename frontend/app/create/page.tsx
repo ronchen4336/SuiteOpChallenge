@@ -173,11 +173,11 @@ export default function CreateWorkflow() {
 
         <Tabs defaultValue="ai" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2 mb-8 bg-primary-100 p-1 rounded-full">
-            <TabsTrigger value="ai" className="flex items-center gap-2 rounded-full data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="ai" className="flex items-center gap-2 rounded-full data-[state=active]:bg-purple-600 data-[state=active]:text-white">
               <Sparkles className="h-4 w-4" />
               AI-Powered Creation
             </TabsTrigger>
-            <TabsTrigger value="manual" className="flex items-center gap-2 rounded-full data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="manual" className="flex items-center gap-2 rounded-full data-[state=active]:bg-purple-600 data-[state=active]:text-white">
               <ArrowRight className="h-4 w-4" />
               Manual Configuration
             </TabsTrigger>

@@ -72,9 +72,15 @@ export default function WorkflowsPage() {
 
       <Tabs defaultValue="all">
         <TabsList className="mb-6">
-          <TabsTrigger value="all">All Workflows</TabsTrigger>
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="inactive">Inactive</TabsTrigger>
+          <TabsTrigger value="all" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white rounded-full px-4 py-2">
+            All Workflows
+          </TabsTrigger>
+          <TabsTrigger value="active" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white rounded-full px-4 py-2">
+            Active
+          </TabsTrigger>
+          <TabsTrigger value="inactive" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white rounded-full px-4 py-2">
+            Inactive
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all">
