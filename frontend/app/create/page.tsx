@@ -20,12 +20,36 @@ interface ApiItem {
   description?: string;
 }
 
+// Expected AI response structure for a single workflow suggestion
+interface AISuggestedWorkflow {
+  workflow_name: string;
+  workflow_description: string;
+  trigger_name: string;
+  action_name: string;
+  rule_type: "immediate" | "scheduled";
+  delay_time: number | null;
+  delay_unit: "minutes" | "hours" | "days" | null;
+}
+
+// Interface for the workflow object returned by the backend (serialized WorkflowRule)
+interface BackendWorkflowRule {
+  id: number | string;
+  name: string;
+  description?: string;
+  trigger: ApiItem; // Expecting the full trigger object as per ApiItem interface
+  action: ApiItem;  // Expecting the full action object as per ApiItem interface
+  rule_type: "immediate" | "scheduled";
+  delay_time?: number | null;
+  delay_unit?: "minutes" | "hours" | "days" | null;
+  is_active: boolean;
+  // created_at and updated_at might also be present if your serializer includes them
+}
+
 export default function CreateWorkflow() {
   const [workflowName, setWorkflowName] = useState("")
   const [workflowDescription, setWorkflowDescription] = useState("")
   const [aiPrompt, setAiPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedWorkflow, setGeneratedWorkflow] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("ai")
   const [workflowType, setWorkflowType] = useState("immediate")
   const [isActive, setIsActive] = useState(true)
@@ -77,30 +101,60 @@ export default function CreateWorkflow() {
     fetchData();
   }, []); // Empty dependency array means this runs once on mount
 
-  const handleGenerateWorkflow = () => {
-    setIsGenerating(true)
-    setTimeout(() => {
-      const mockGeneratedWorkflow = {
-        name: aiPrompt.split(" ").slice(0, 4).join(" "),
-        description: aiPrompt,
-        trigger: dbTriggers.length > 0 ? String(dbTriggers[0].id) : "", 
-        action: dbActions.length > 0 ? String(dbActions[0].id) : "",
-        type: workflowType,
-        delay:
-          workflowType === "scheduled"
-            ? {
-                time: parseInt(delayTime, 10),
-                unit: delayUnit,
-              }
-            : null,
+  const handleGenerateWorkflow = async () => {
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/rules/generate-from-ai/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+
+      const responseData = await response.json(); // Try to parse JSON regardless of ok status for error details
+
+      if (!response.ok) {
+        // Use error message from backend if available, otherwise default
+        const errorMessage = responseData?.error || responseData?.message || (responseData?.ai_reported_errors && Array.isArray(responseData.ai_reported_errors) && responseData.ai_reported_errors.length > 0 ? `AI reported: ${responseData.ai_reported_errors[0]?.issues?.join(', ') || 'error'}` : `AI generation failed with status: ${response.status}`);
+        toast.error(errorMessage);
+        setIsGenerating(false);
+        return;
       }
-      setGeneratedWorkflow(mockGeneratedWorkflow)
-      setWorkflowName(mockGeneratedWorkflow.name)
-      setWorkflowDescription(mockGeneratedWorkflow.description)
-      setSelectedTrigger(mockGeneratedWorkflow.trigger ? String(mockGeneratedWorkflow.trigger) : "")
-      setSelectedAction(mockGeneratedWorkflow.action ? String(mockGeneratedWorkflow.action) : "")
-      setIsGenerating(false)
-    }, 1500)
+
+      // Backend now returns an object like { created_workflows: [], ai_reported_errors: [], message: "" }
+      const createdWorkflows: BackendWorkflowRule[] = responseData.created_workflows || [];
+      const aiErrors: any[] = responseData.ai_reported_errors || [];
+      const backendMessage: string = responseData.message || "";
+
+      if (aiErrors.length > 0) {
+        // Display first AI-reported error prominently
+        const firstAiError = aiErrors[0]?.issues?.join(', ') || JSON.stringify(aiErrors[0]);
+        toast.warning(`AI reported issues: ${firstAiError}`);
+        // You might want to display all AI errors if there are multiple
+      }
+
+      if (!createdWorkflows || createdWorkflows.length === 0) {
+        const infoMessage = backendMessage || (aiErrors.length > 0 ? "Review AI feedback." : "AI did not create any workflows. Try rephrasing.");
+        toast.info(infoMessage);
+        setIsGenerating(false);
+        return;
+      }
+
+      toast.success(`AI successfully created ${createdWorkflows.length} workflow(s).`);
+      if (createdWorkflows.length > 1) {
+          toast.info("Additional created workflows can be found on the Workflows page.");
+      }
+      setActiveTab("manual"); // Switch to manual tab for review
+
+    } catch (error) {
+      // Catch network errors or issues with fetch itself
+      toast.error("An error occurred connecting to the AI service. Please check your connection.");
+      console.error("Error in handleGenerateWorkflow (fetch/network):".concat(" ").concat(error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   const handleSaveWorkflow = async () => {
@@ -207,29 +261,6 @@ export default function CreateWorkflow() {
                   </p>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor="workflow-type">Workflow Type</Label>
-                  <Select value={workflowType} onValueChange={setWorkflowType}>
-                    <SelectTrigger id="workflow-type" className="w-[180px] rounded-full">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="immediate">
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-primary" />
-                          <span>Immediate</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="scheduled">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-primary" />
-                          <span>Scheduled</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <Button onClick={handleGenerateWorkflow} disabled={!aiPrompt || isGenerating} className="w-full">
                   {isGenerating ? (
                     <>Generating...</>
@@ -242,19 +273,6 @@ export default function CreateWorkflow() {
                 </Button>
               </CardContent>
             </Card>
-
-            {generatedWorkflow && (
-              <div className="mt-8">
-                <WorkflowPreview 
-                  workflow={{
-                    ...generatedWorkflow,
-                    trigger: dbTriggers.find(t => String(t.id) === String(generatedWorkflow.trigger))?.name || String(generatedWorkflow.trigger),
-                    action: dbActions.find(a => String(a.id) === String(generatedWorkflow.action))?.name || String(generatedWorkflow.action),
-                  }}
-                  onEdit={() => setActiveTab("manual")} 
-                />
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="manual">
