@@ -396,12 +396,14 @@ export default function EditWorkflow() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={isSubmitting || !workflowName}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Workflow
-              </Button>
-            </AlertDialogTrigger>
+            <Button 
+              variant="destructive" 
+              disabled={isSubmitting || !workflowName}
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Workflow
+            </Button>
             <Button
               onClick={handleUpdateWorkflow}
               disabled={!workflowName || !selectedTrigger || !selectedAction || isSubmitting}
