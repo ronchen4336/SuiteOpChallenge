@@ -148,18 +148,6 @@ export default function RecentWorkflows() {
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2 mt-6">
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    {workflow.is_active ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
-                  </Button>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
               {/* The 'lastRun' section is removed as it's not in the API data yet */}
               {/* <div className="bg-primary-100 p-6 md:w-48 flex flex-col justify-center items-center">
