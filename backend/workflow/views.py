@@ -2,8 +2,8 @@ from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Trigger, Action, WorkflowRule
-from .serializers import TriggerSerializer, ActionSerializer, WorkflowRuleSerializer
+from .models import Trigger, Action, WorkflowRule, WorkflowExecutionLog
+from .serializers import TriggerSerializer, ActionSerializer, WorkflowRuleSerializer, WorkflowExecutionLogSerializer
 import json
 from django.conf import settings # To access settings like API keys, if needed here
 from .gemini import get_ai_suggestions_for_prompt # Import the new function
@@ -11,6 +11,8 @@ from .gemini import get_ai_suggestions_for_prompt # Import the new function
 # from django.conf import settings # To access settings like API keys
 # We will need OpenAI or Gemini client later
 # import openai 
+from django.utils import timezone
+from datetime import timedelta
 
 class TriggerViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -181,6 +183,76 @@ class WorkflowRuleViewSet(viewsets.ModelViewSet):
             print(f"Traceback: {traceback.format_exc()}")
             return Response({"error": f"An unexpected error occurred on the server: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # New action for simulating triggers
+    @action(detail=False, methods=['post'], url_path='simulate-trigger')
+    def simulate_trigger(self, request):
+        trigger_id = request.data.get('trigger_id')
+        if not trigger_id:
+            return Response({"error": "trigger_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            trigger_id = int(trigger_id)
+            trigger_instance = Trigger.objects.get(id=trigger_id)
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid trigger_id format"}, status=status.HTTP_400_BAD_REQUEST)
+        except Trigger.DoesNotExist:
+            return Response({"error": f"Trigger with id {trigger_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        active_rules = WorkflowRule.objects.filter(trigger=trigger_instance, is_active=True)
+        
+        simulated_logs_created = []
+        simulation_errors = []
+
+        for rule in active_rules:
+            log_data = {
+                'workflow_rule_id': rule.id,
+                'trigger_name_snapshot': trigger_instance.name,
+                'action_name_snapshot': rule.action.name, # Assumes action is always present on a rule
+            }
+            current_time = timezone.now() # Requires: from django.utils import timezone
+
+            if rule.rule_type == 'immediate':
+                log_data['status'] = 'SIMULATED_IMMEDIATE'
+                log_data['actual_execution_time'] = current_time
+            elif rule.rule_type == 'scheduled':
+                log_data['status'] = 'SIMULATED_SCHEDULED'
+                if rule.delay_time and rule.delay_unit:
+                    delta = timedelta()
+                    if rule.delay_unit == 'minutes':
+                        delta = timedelta(minutes=rule.delay_time)
+                    elif rule.delay_unit == 'hours':
+                        delta = timedelta(hours=rule.delay_time)
+                    elif rule.delay_unit == 'days':
+                        delta = timedelta(days=rule.delay_time)
+                    log_data['scheduled_execution_time'] = current_time + delta
+                else:
+                    log_data['status'] = 'SIMULATION_ERROR'
+                    log_data['details'] = f"Rule '{rule.name}' is scheduled but has invalid delay parameters."
+                    simulation_errors.append(log_data)
+                    continue # Skip creating this log as a success
+            else:
+                log_data['status'] = 'SIMULATION_ERROR'
+                log_data['details'] = f"Rule '{rule.name}' has an unknown rule_type: {rule.rule_type}."
+                simulation_errors.append(log_data)
+                continue
+            
+            log_serializer = WorkflowExecutionLogSerializer(data=log_data) # Ensure this serializer is in scope
+            if log_serializer.is_valid():
+                log_instance = log_serializer.save()
+                simulated_logs_created.append(WorkflowExecutionLogSerializer(log_instance).data)
+            else:
+                log_data['status'] = 'SIMULATION_ERROR' # Override status
+                log_data['details'] = f"Error saving log for rule '{rule.name}': {json.dumps(log_serializer.errors)}"
+                simulation_errors.append(log_data)
+
+        response_data = {
+            "trigger_simulated": trigger_instance.name,
+            "rules_processed_count": active_rules.count(),
+            "simulated_logs_created": simulated_logs_created,
+            "simulation_errors": simulation_errors
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
     # We will add a custom action here later for AI-powered rule creation
     # @action(detail=False, methods=['post'], url_path='generate-from-text')
     # def generate_from_text(self, request):
@@ -205,3 +277,13 @@ class WorkflowRuleViewSet(viewsets.ModelViewSet):
     #     # You might want to return the suggested rule for confirmation, 
     #     # or even a serialized (but not saved) WorkflowRule instance.
     #     return Response(suggested_rule, status=status.HTTP_200_OK)
+
+class WorkflowExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for viewing workflow execution logs.
+    Allows only GET requests to list logs.
+    """
+    queryset = WorkflowExecutionLog.objects.all().order_by('-logged_at') # Default ordering
+    serializer_class = WorkflowExecutionLogSerializer
+    # http_method_names can be removed to default to read-only if ModelViewSet is changed to ReadOnlyModelViewSet
+    # http_method_names = ['get', 'head', 'options'] # Explicitly make it read-only for listing

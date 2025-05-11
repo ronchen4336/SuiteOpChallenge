@@ -42,9 +42,12 @@ export default function Navbar() {
 
         <div className="flex items-center gap-4">
           {/* <ModeToggle /> */}
-          <Button variant="outline" size="icon" className="hidden md:flex rounded-full">
-            <Settings className="h-4 w-4" />
-          </Button>
+          <Link href="/dev/trigger-simulator" passHref legacyBehavior>
+            <Button variant="outline" className="hidden md:flex items-center gap-2 rounded-full">
+              <Settings className="h-4 w-4" /> 
+              <span>Dev Tools</span>
+            </Button>
+          </Link>
         </div>
       </div>
     </header>

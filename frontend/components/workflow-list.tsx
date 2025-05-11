@@ -40,9 +40,10 @@ interface WorkflowListProps {
   searchTerm?: string;
   filterType?: string; // 'all', 'immediate', 'scheduled'
   filterTrigger?: string; // 'all', or specific trigger name/id
+  showControls?: boolean; // New prop to control visibility of edit/delete/toggle
 }
 
-export default function WorkflowList({ filterActive, searchTerm, filterType, filterTrigger }: WorkflowListProps) {
+export default function WorkflowList({ filterActive, searchTerm, filterType, filterTrigger, showControls = true }: WorkflowListProps) {
   const [allFetchedWorkflows, setAllFetchedWorkflows] = useState<WorkflowRuleFromAPI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,27 +228,30 @@ export default function WorkflowList({ filterActive, searchTerm, filterType, fil
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        checked={workflow.is_active} 
-                        onCheckedChange={(newStatus) => handleToggleActive(workflow.id, newStatus)}
-                      /> 
-                      <span className="text-sm">{workflow.is_active ? "Active" : "Inactive"}</span>
-                    </div>
-                    <Link href={`/workflows/edit/${workflow.id}`}> {/* TODO: Edit page needs to be created */}
-                      <Button variant="ghost" size="icon">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => setWorkflowToDelete({ id: workflow.id, name: workflow.name })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-
+                    {showControls && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Switch 
+                            checked={workflow.is_active} 
+                            onCheckedChange={(newStatus) => handleToggleActive(workflow.id, newStatus)}
+                          /> 
+                          <span className="text-sm">{workflow.is_active ? "Active" : "Inactive"}</span>
+                        </div>
+                        <Link href={`/workflows/edit/${workflow.id}`}> {/* TODO: Edit page needs to be created */}
+                          <Button variant="ghost" size="icon">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setWorkflowToDelete({ id: workflow.id, name: workflow.name })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">{workflow.description || "No description provided."}</p>

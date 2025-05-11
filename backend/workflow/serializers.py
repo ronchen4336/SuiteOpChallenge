@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Trigger, Action, WorkflowRule
+from .models import Trigger, Action, WorkflowRule, WorkflowExecutionLog
 
 class TriggerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,6 +20,8 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
     action_id = serializers.PrimaryKeyRelatedField(
         queryset=Action.objects.all(), source='action', write_only=True
     )
+    # To include execution logs when a rule is fetched:
+    # execution_logs = WorkflowExecutionLogSerializer(many=True, read_only=True) # Forward declaration issue, define Log Serializer first or import carefully
 
     class Meta:
         model = WorkflowRule
@@ -27,7 +29,8 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'trigger', 'action', 
             'rule_type', 'delay_time', 'delay_unit', 'is_active',
             'trigger_id', 'action_id',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            # 'execution_logs' # Add if Log Serializer is defined above this or imported
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -48,3 +51,28 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
                 data['delay_time'] = None
                 data['delay_unit'] = None
         return data 
+
+class WorkflowRuleNameSerializer(serializers.ModelSerializer):
+    """A light serializer for just the workflow rule name and ID."""
+    class Meta:
+        model = WorkflowRule
+        fields = ['id', 'name']
+
+class WorkflowExecutionLogSerializer(serializers.ModelSerializer):
+    # workflow_rule = WorkflowRuleSerializer(read_only=True) # This would nest the full rule, could be verbose
+    workflow_rule = WorkflowRuleNameSerializer(read_only=True) # Use the lighter serializer
+    workflow_rule_id = serializers.PrimaryKeyRelatedField(
+        queryset=WorkflowRule.objects.all(), source='workflow_rule', write_only=True
+    )
+
+    class Meta:
+        model = WorkflowExecutionLog
+        fields = [
+            'id', 'workflow_rule', 'workflow_rule_id',
+            'status', 
+            'trigger_name_snapshot', 'action_name_snapshot',
+            'logged_at', 'scheduled_execution_time', 'actual_execution_time', 'details'
+        ]
+        read_only_fields = ['id', 'logged_at', 'workflow_rule'] 
+        # workflow_rule is read_only because it's populated by workflow_rule_id on write,
+        # and workflow_rule_id itself is write_only=True in its declaration. 
