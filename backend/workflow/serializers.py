@@ -20,6 +20,7 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
     action_id = serializers.PrimaryKeyRelatedField(
         queryset=Action.objects.all(), source='action', write_only=True
     )
+    execution_count = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowRule
@@ -28,9 +29,14 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
             'rule_type', 'delay_time', 'delay_unit', 'is_active',
             'trigger_id', 'action_id',
             'created_at', 'updated_at',
+            'execution_count'
             # 'execution_logs' # Add if Log Serializer is defined above this or imported
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_execution_count(self, obj):
+        # obj is the WorkflowRule instance
+        return obj.execution_logs.filter(status='EXECUTED').count()
 
     def validate(self, data):
         rule_type = data.get('rule_type')

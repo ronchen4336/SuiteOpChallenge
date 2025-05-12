@@ -32,7 +32,8 @@ interface WorkflowRuleFromAPI {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
-  // Properties not yet in API: actionIcon, lastRun, executionCount
+  execution_count: number;
+  // Properties not yet in API: actionIcon, lastRun
 }
 
 interface WorkflowListProps {
@@ -269,7 +270,7 @@ export default function WorkflowList({ filterActive, searchTerm, filterType, fil
                   </div>
                   <div>
                     <h4 className="text-sm font-medium mb-1">Executions</h4>
-                    <p className="text-sm">N/A</p> {/* Placeholder */}
+                    <p className="text-sm">{workflow.execution_count}</p>
                   </div>
                 </div>
               </div>

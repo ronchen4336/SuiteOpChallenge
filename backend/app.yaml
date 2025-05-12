@@ -9,13 +9,13 @@ instance_class: F1 # Adjust as needed, F1 is the smallest standard instance
 
 env_variables:
   DJANGO_SETTINGS_MODULE: 'core.settings' # Ensures production settings are used
-  DB_NAME: "{DB_NAME}"
-  DB_USER: "{DB_USER}"
-  DB_PASSWORD: "{DB_PASSWORD}"
-  DB_HOST: "{DB_HOST}"
-  DB_PORT: "{DB_PORT}"
+  DB_NAME: "SuiteOpDB"
+  DB_USER: "mraddtab"
+  DB_PASSWORD: "Test@123"
+  DB_HOST: "suiteopserver.database.windows.net"
+  DB_PORT: "1433"
   DB_DRIVER: "ODBC Driver 18 for SQL Server"
-  GEMINI_API_KEY: "{GEMINI_API_KEY}"
+  GEMINI_API_KEY: "AIzaSyAAgdcUffoHRsvWMupvTbKw_Vu0ytnfLsg"
 
 automatic_scaling:
   min_num_instances: 1 # Adjusted for flex environment
