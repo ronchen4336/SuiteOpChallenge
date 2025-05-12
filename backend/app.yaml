@@ -1,0 +1,36 @@
+service: backend
+runtime: custom # Switch to custom runtime to use DockerFile
+env: flex # Specify the environment type for custom runtime
+entrypoint: gunicorn -b :$PORT core.wsgi:application # Replace 'core' if your Django project name is different
+
+instance_class: F1 # Adjust as needed, F1 is the smallest standard instance
+
+# runtime_config and packages are removed as DockerFile will handle system dependencies
+
+env_variables:
+  DJANGO_SETTINGS_MODULE: 'core.settings' # Ensures production settings are used
+  DB_NAME: "{DB_NAME}"
+  DB_USER: "{DB_USER}"
+  DB_PASSWORD: "{DB_PASSWORD}"
+  DB_HOST: "{DB_HOST}"
+  DB_PORT: "{DB_PORT}"
+  DB_DRIVER: "ODBC Driver 18 for SQL Server"
+  GEMINI_API_KEY: "{GEMINI_API_KEY}"
+
+automatic_scaling:
+  min_num_instances: 1 # Adjusted for flex environment
+  max_num_instances: 1 # Your previous max_instances
+  cpu_utilization:
+    target_utilization: 0.65 # Your previous target_cpu_utilization
+  # You can add more scaling rules if needed
+
+handlers:
+  # This configures Google App Engine to serve the files in the app's static
+  # directory.
+  - url: /static
+    static_dir: staticfiles # Corresponds to STATIC_ROOT in settings.py
+
+  # This handler routes all other requests to your Django app.
+  - url: /.*
+    script: auto
+    secure: always 
