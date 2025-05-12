@@ -45,6 +45,45 @@ interface BackendWorkflowRule {
   // created_at and updated_at might also be present if your serializer includes them
 }
 
+// --- New Interfaces for AI Preview Feature ---
+// Interface for the AI's direct suggestion
+interface AISuggestion {
+  workflow_name?: string;
+  workflow_description?: string;
+  trigger_name?: string;
+  action_name?: string;
+  rule_type?: "immediate" | "scheduled";
+  delay_time?: number | string | null; // AI might send string
+  delay_unit?: "minutes" | "hours" | "days" | null;
+}
+
+// Interface for the mapped suggestion data prepared by the backend
+interface MappedSuggestion {
+  workflow_name: string;
+  workflow_description: string;
+  rule_type: "immediate" | "scheduled" | null; // Can be null if AI's type was invalid
+  delay_time: number | null;
+  delay_unit: "minutes" | "hours" | "days" | null;
+  trigger_id: number | null;
+  trigger_name: string | null; // Name from DB if found
+  action_id: number | null;
+  action_name: string | null; // Name from DB if found
+  is_active: boolean;
+}
+
+// Interface for a single preview item in the list from the backend
+interface AIPreviewWorkflow {
+  original_ai_suggestion: AISuggestion;
+  mapped_suggestion: MappedSuggestion;
+  mapping_notes: string[];
+}
+
+// For global errors reported by AI
+interface AIGlobalError {
+  [key: string]: any; // Flexible for now, adjust if AI provides a more structured error object
+}
+// --- End New Interfaces ---
+
 export default function CreateWorkflow() {
   const [workflowName, setWorkflowName] = useState("")
   const [workflowDescription, setWorkflowDescription] = useState("")
@@ -66,6 +105,43 @@ export default function CreateWorkflow() {
   const [selectedAction, setSelectedAction] = useState<string>("")
   const [delayTime, setDelayTime] = useState("15")
   const [delayUnit, setDelayUnit] = useState("minutes")
+
+  // --- New State Variables for AI Preview Feature ---
+  const [aiPreviewSuggestions, setAiPreviewSuggestions] = useState<AIPreviewWorkflow[]>([]);
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number | null>(null);
+  const [currentMappingNotes, setCurrentMappingNotes] = useState<string[]>([]);
+  const [aiGlobalErrors, setAiGlobalErrors] = useState<AIGlobalError[]>([]);
+  // --- End New State Variables ---
+
+  // Helper function to populate the manual form with a selected AI suggestion
+  const populateFormWithSuggestion = (preview: AIPreviewWorkflow | null, index: number | null) => {
+    if (preview) {
+      const suggestion = preview.mapped_suggestion;
+      setWorkflowName(suggestion.workflow_name || "");
+      setWorkflowDescription(suggestion.workflow_description || "");
+      setSelectedTrigger(suggestion.trigger_id?.toString() || "");
+      setSelectedAction(suggestion.action_id?.toString() || "");
+      setWorkflowType(suggestion.rule_type || "immediate");
+      setDelayTime(suggestion.delay_time?.toString() || "15");
+      setDelayUnit(suggestion.delay_unit || "minutes");
+      setIsActive(suggestion.is_active);
+      setCurrentMappingNotes(preview.mapping_notes || []);
+      setSelectedPreviewIndex(index);
+      setActiveTab("manual"); // Switch to manual tab for review
+    } else {
+      // Clear the form if null is passed (e.g., no suggestion selected)
+      setWorkflowName("");
+      setWorkflowDescription("");
+      setSelectedTrigger("");
+      setSelectedAction("");
+      setWorkflowType("immediate");
+      setDelayTime("15");
+      setDelayUnit("minutes");
+      setIsActive(true);
+      setCurrentMappingNotes([]);
+      setSelectedPreviewIndex(null);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -103,6 +179,10 @@ export default function CreateWorkflow() {
 
   const handleGenerateWorkflow = async () => {
     setIsGenerating(true);
+    // Clear previous results
+    setAiPreviewSuggestions([]);
+    populateFormWithSuggestion(null, null); // Clear form and selections
+    setAiGlobalErrors([]); // Still clear global errors here
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/generate-from-ai/`, {
@@ -113,45 +193,49 @@ export default function CreateWorkflow() {
         body: JSON.stringify({ prompt: aiPrompt }),
       });
 
-      const responseData = await response.json(); // Try to parse JSON regardless of ok status for error details
+      const responseData = await response.json();
 
       if (!response.ok) {
-        // Use error message from backend if available, otherwise default
-        const errorMessage = responseData?.error || responseData?.message || (responseData?.ai_reported_errors && Array.isArray(responseData.ai_reported_errors) && responseData.ai_reported_errors.length > 0 ? `AI reported: ${responseData.ai_reported_errors[0]?.issues?.join(', ') || 'error'}` : `AI generation failed with status: ${response.status}`);
+        const errorMessage = responseData?.error || responseData?.message || `AI generation failed with status: ${response.status}`;
         toast.error(errorMessage);
+        setAiGlobalErrors(responseData?.ai_reported_errors || [{ message: errorMessage}]); // Store global errors if any
         setIsGenerating(false);
         return;
       }
-
-      // Backend now returns an object like { created_workflows: [], ai_reported_errors: [], message: "" }
-      const createdWorkflows: BackendWorkflowRule[] = responseData.created_workflows || [];
-      const aiErrors: any[] = responseData.ai_reported_errors || [];
+      
+      const previewWorkflows: AIPreviewWorkflow[] = responseData.preview_workflows || [];
+      const globalErrors: AIGlobalError[] = responseData.ai_reported_errors || [];
       const backendMessage: string = responseData.message || "";
 
-      if (aiErrors.length > 0) {
-        // Display first AI-reported error prominently
-        const firstAiError = aiErrors[0]?.issues?.join(', ') || JSON.stringify(aiErrors[0]);
-        toast.warning(`AI reported issues: ${firstAiError}`);
-        // You might want to display all AI errors if there are multiple
+      setAiPreviewSuggestions(previewWorkflows);
+      setAiGlobalErrors(globalErrors);
+
+      if (backendMessage) {
+        toast.info(backendMessage); // Display overall message from backend
       }
 
-      if (!createdWorkflows || createdWorkflows.length === 0) {
-        const infoMessage = backendMessage || (aiErrors.length > 0 ? "Review AI feedback." : "AI did not create any workflows. Try rephrasing.");
-        toast.info(infoMessage);
-        setIsGenerating(false);
-        return;
+      if (globalErrors.length > 0) {
+        const firstGlobalErrorMsg = globalErrors[0]?.issues?.join(', ') || JSON.stringify(globalErrors[0]);
+        toast.warning(`AI reported global issues: ${firstGlobalErrorMsg}`);
       }
 
-      toast.success(`AI successfully created ${createdWorkflows.length} workflow(s).`);
-      if (createdWorkflows.length > 1) {
-          toast.info("Additional created workflows can be found on the Workflows page.");
+      if (previewWorkflows.length > 0) {
+        if (previewWorkflows.length === 1) {
+          // If only one suggestion, load it directly
+          populateFormWithSuggestion(previewWorkflows[0], 0);
+          toast.success(`AI suggested 1 workflow. Review and save manually.`);
+        } else {
+          // Multiple suggestions: user will pick from a list (UI to be added)
+          toast.success(`AI suggested ${previewWorkflows.length} workflows. Please select one to load and review.`);
+          // setActiveTab("ai"); // Keep user on AI tab to see the list
+        }
+      } else if (globalErrors.length === 0) {
+        toast.info("AI did not suggest any workflows based on your prompt. Try rephrasing.");
       }
-      setActiveTab("manual"); // Switch to manual tab for review
 
     } catch (error) {
-      // Catch network errors or issues with fetch itself
       toast.error("An error occurred connecting to the AI service. Please check your connection.");
-      console.error("Error in handleGenerateWorkflow (fetch/network):".concat(" ").concat(error instanceof Error ? error.message : String(error)));
+      console.error("Error in handleGenerateWorkflow (fetch/network):", error instanceof Error ? error.message : String(error));
     } finally {
       setIsGenerating(false);
     }
@@ -261,6 +345,17 @@ export default function CreateWorkflow() {
                   </p>
                 </div>
 
+                {aiGlobalErrors.length > 0 && (
+                  <div className="p-3 bg-red-100 border border-red-300 rounded-md text-red-700 space-y-1">
+                    <h4 className="font-semibold">AI Global Errors:</h4>
+                    <ul className="list-disc list-inside text-sm">
+                      {aiGlobalErrors.map((error, index) => (
+                        <li key={index}>{typeof error === 'string' ? error : JSON.stringify(error)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <Button onClick={handleGenerateWorkflow} disabled={!aiPrompt || isGenerating} className="w-full">
                   {isGenerating ? (
                     <>Generating...</>
@@ -271,6 +366,33 @@ export default function CreateWorkflow() {
                     </>
                   )}
                 </Button>
+
+                {aiPreviewSuggestions.length > 1 && (
+                  <div className="mt-6 space-y-3">
+                    <h4 className="font-semibold text-lg">Select an AI Suggestion to Load:</h4>
+                    <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                      <div className="p-4 space-y-2">
+                        {aiPreviewSuggestions.map((preview, index) => (
+                          <div 
+                            key={index} 
+                            className={`p-3 rounded-md flex justify-between items-center transition-colors ${selectedPreviewIndex === index ? 'bg-primary-100' : 'hover:bg-muted/50'}`}
+                          >
+                            <span className="text-sm font-medium">
+                              {index + 1}. {preview.mapped_suggestion.workflow_name || "Unnamed Workflow"}
+                            </span>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => populateFormWithSuggestion(preview, index)}
+                            >
+                              Load Suggestion
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -282,6 +404,17 @@ export default function CreateWorkflow() {
                 <CardDescription>Configure your workflow step by step</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {currentMappingNotes.length > 0 && (
+                  <div className="p-3 mb-4 bg-yellow-100 border border-yellow-300 rounded-md text-yellow-700 space-y-1">
+                    <h4 className="font-semibold">Notes for this AI Suggestion:</h4>
+                    <ul className="list-disc list-inside text-sm">
+                      {currentMappingNotes.map((note, index) => (
+                        <li key={index}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="workflow-name">Workflow Name</Label>

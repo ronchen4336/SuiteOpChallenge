@@ -1,12 +1,11 @@
 # SuiteOp Automation Workflow Challenge
 
-Hi! 👋 I'm Ron, and this repository contains my submission for SuiteOp's Automation Workflow Challenge. SuiteOp automates lodging operations for vacation rentals and apartment-hotels. This project showcases a simple yet powerful workflow orchestration tool enhanced by modern AI capabilities.
-
+Hi! 👋 I'm Ron, and this repository contains my submission for SuiteOp's Automation Workflow Challenge.
 ---
 
 ## 🚀 Project Overview
 
-This web application lets users easily create automation workflows using an intuitive "If This, Then That" structure. With the help of AI (OpenAI/Gemini), users can define workflows naturally by typing simple instructions.
+This web application lets users easily create automation workflows using an intuitive "If This, Then That" structure. With the help of AI (Gemini), users can define workflows naturally by typing simple instructions or manually create them with an intuative interface.
 
 ---
 
@@ -17,12 +16,15 @@ This web application lets users easily create automation workflows using an intu
 - AI-driven rule creation from natural language input.
 
 ### 🔔 Triggers Supported
+- Booking canceled
+- Cleaning completed
 - Guest checks in
 - Guest checks out
-- Cleaning completed
-- Maintenance issue reported
-- Booking canceled
+- Guest Sends Message
 - Inventory running low
+- Maintenance issue reported
+- New Booking Confirmed
+- Smart Device Alert
 
 ### ⚙️ Actions Supported
 - Send Email
@@ -38,38 +40,23 @@ This web application lets users easily create automation workflows using an intu
 ---
 
 ## 🤖 AI-Powered Features
-- Uses OpenAI or Gemini APIs for interpreting natural language instructions.
-- Preview and manually edit AI-generated rules.
-
+- Uses Gemini APIs for interpreting natural language instructions, and creating workflows.
 ---
 
 ## 🛠️ Technical Approach
-- **Frontend:** Minimalistic web UI focusing on usability.
-- **Backend:** Lightweight backend with local storage.
-- **Scheduler and Logging:** Simple scheduler mechanism, mock integrations, and basic logging.
-
----
-
-## 📌 Trade-offs and Decisions
-Due to the 3-hour development timeframe, the focus was placed on AI integration accuracy and core functionality, rather than UI/UX enhancements or advanced storage solutions.
+- **Frontend:** React (Next.js) for a dynamic and responsive user interface.
+- **Backend:** Django (Python) providing a robust and scalable API.
+- **Database:** Azure SQL for reliable and managed data storage.
+- **Scheduler and Logging:** Utilizes Google Cloud Scheduler to trigger tasks via an HTTP endpoint to a Django management command. Basic logging implemented.
 
 ---
 
 ## 🚀 Live Demo
-- [Link to Live Hosted Application](#)
+- [Link to Live Hosted Application](#https://frontend-dot-suite-op-459500.ue.r.appspot.com/)
 
 ---
 
-## 📁 Source Code
-- [GitHub Repository](#)
-
----
-
-## 📧 Contact
-For any questions or feedback, please reach out:
-- Jean at [jean@suiteop.com](mailto:jean@suiteop.com)
-
----
+## 🚀 Getting Started
 
 Thanks for the opportunity—I enjoyed tackling this challenge!
 

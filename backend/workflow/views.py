@@ -13,6 +13,10 @@ from .gemini import get_ai_suggestions_for_prompt # Import the new function
 # import openai 
 from django.utils import timezone
 from datetime import timedelta
+from django.http import JsonResponse
+from django.core.management import call_command
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 class TriggerViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -41,147 +45,126 @@ class WorkflowRuleViewSet(viewsets.ModelViewSet):
         if not prompt_text:
             return Response({"error": "No prompt provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        created_workflows_instances = []
-        ai_suggestions_list = []
-        ai_errors_list = [] # To store errors reported by AI
+        preview_suggestions_for_frontend = []
+        # ai_suggestions_list = [] # This will be populated from the AI call
+        ai_global_errors = [] # To store errors reported by AI for the whole prompt
 
         try:
-            # Call the refactored function from gemini.py
             ai_response_json_str = get_ai_suggestions_for_prompt(prompt_text)
 
             if ai_response_json_str is None:
-                # get_ai_suggestions_for_prompt would have printed detailed errors
-                return Response({"error": "AI service failed to generate suggestions. Check server logs for details."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error": "AI service failed to generate suggestions. Check server logs."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # Parse the JSON string response from AI
             try:
                 ai_data = json.loads(ai_response_json_str)
             except json.JSONDecodeError as je:
                 print(f"Error: AI response was not valid JSON: {je}")
                 print(f"AI Response String: {ai_response_json_str}")
-                return Response({"error": "AI response was not in the expected JSON format."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"error": "AI response was not in the expected JSON format."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            ai_suggestions_list = ai_data.get("suggested_workflows", [])
-            ai_errors_list = ai_data.get("errors", []) # Capture errors if AI returns them
+            raw_ai_suggestions = ai_data.get("suggested_workflows", [])
+            ai_global_errors = ai_data.get("errors", []) # Capture global errors if AI returns them
 
-            if not ai_suggestions_list and not ai_errors_list:
-                # If AI returns empty suggestions and no specific errors in the JSON
-                return Response({"message": "AI could not suggest any workflows based on the prompt, or the prompt was too vague."}, status=status.HTTP_200_OK)
-            
-            if ai_errors_list:
-                # If AI explicitly returns errors, pass them to the frontend
-                # You might want to format this more nicely or log it more extensively
-                print(f"AI reported errors: {ai_errors_list}")
-                # For now, if there are AI-reported errors, we might not proceed with saving any partial suggestions
-                # or we could attempt to save valid ones and report errors for others.
-                # Current logic will try to save valid suggestions even if AI also reports errors for others.
+            if not raw_ai_suggestions and not ai_global_errors:
+                return Response({
+                    "preview_workflows": [],
+                    "ai_reported_errors": [],
+                    "message": "AI could not suggest any workflows or the prompt was too vague."
+                }, status=status.HTTP_200_OK)
 
-            # Process suggestions (even if there were some AI-reported errors for other suggestions)
-            for suggestion in ai_suggestions_list:
-                try:
-                    trigger_name = suggestion.get('trigger_name')
-                    action_name = suggestion.get('action_name')
-                    rule_type = suggestion.get('rule_type')
+            for raw_suggestion in raw_ai_suggestions:
+                mapped_suggestion_data = {
+                    'workflow_name': raw_suggestion.get('workflow_name', 'AI Suggested Workflow'),
+                    'workflow_description': raw_suggestion.get('workflow_description', ''),
+                    'rule_type': raw_suggestion.get('rule_type'),
+                    'delay_time': None,
+                    'delay_unit': None,
+                    'trigger_id': None,
+                    'trigger_name': None, # Will be populated if found
+                    'action_id': None,
+                    'action_name': None,  # Will be populated if found
+                    'is_active': True # Default to true, user can change on frontend
+                }
+                mapping_notes = []
 
-                    # Case-insensitive matching for trigger and action names
-                    trigger_instance = Trigger.objects.filter(name__iexact=trigger_name).first()
-                    action_instance = Action.objects.filter(name__iexact=action_name).first()
+                # Map Trigger
+                ai_trigger_name = raw_suggestion.get('trigger_name')
+                if ai_trigger_name:
+                    trigger_instance = Trigger.objects.filter(name__iexact=ai_trigger_name).first()
+                    if trigger_instance:
+                        mapped_suggestion_data['trigger_id'] = trigger_instance.id
+                        mapped_suggestion_data['trigger_name'] = trigger_instance.name # Use actual DB name
+                    else:
+                        mapping_notes.append(f"AI suggested trigger '{ai_trigger_name}' which was not found. Please select a trigger.")
+                else:
+                    mapping_notes.append("AI did not suggest a trigger. Please select one.")
 
-                    error_messages_for_suggestion = []
-                    if not trigger_instance:
-                        msg = f"AI suggested an unknown trigger: '{trigger_name}'."
-                        print(msg + " Skipping this suggestion.")
-                        error_messages_for_suggestion.append(msg)
-                        # continue # Depending on policy, either skip or try to save with errors noted
-                    
-                    if not action_instance:
-                        msg = f"AI suggested an unknown action: '{action_name}'."
-                        print(msg + " Skipping this suggestion.")
-                        error_messages_for_suggestion.append(msg)
-                        # continue
-                    
-                    if error_messages_for_suggestion: # If critical components are missing, skip
-                        # You could collect these errors and return them if needed
-                        continue
+                # Map Action
+                ai_action_name = raw_suggestion.get('action_name')
+                if ai_action_name:
+                    action_instance = Action.objects.filter(name__iexact=ai_action_name).first()
+                    if action_instance:
+                        mapped_suggestion_data['action_id'] = action_instance.id
+                        mapped_suggestion_data['action_name'] = action_instance.name # Use actual DB name
+                    else:
+                        mapping_notes.append(f"AI suggested action '{ai_action_name}' which was not found. Please select an action.")
+                else:
+                    mapping_notes.append("AI did not suggest an action. Please select one.")
 
-                    workflow_data = {
-                        'name': suggestion.get('workflow_name', 'AI Suggested Workflow'),
-                        'description': suggestion.get('workflow_description', ''),
-                        'trigger_id': trigger_instance.id if trigger_instance else None,
-                        'action_id': action_instance.id if action_instance else None,
-                        'rule_type': rule_type,
-                        'is_active': True 
-                    }
-                    
-                    # Ensure delay_time is treated as integer if present
-                    delay_time_raw = suggestion.get('delay_time')
+                # Process delay if rule_type is 'scheduled'
+                if mapped_suggestion_data['rule_type'] == 'scheduled':
+                    delay_time_raw = raw_suggestion.get('delay_time')
+                    delay_unit_raw = raw_suggestion.get('delay_unit')
+
                     if delay_time_raw is not None:
                         try:
-                            workflow_data['delay_time'] = int(float(delay_time_raw)) # AI might return float, DB needs int
+                            parsed_delay_time = int(float(delay_time_raw)) # AI might send float
+                            if parsed_delay_time > 0:
+                                mapped_suggestion_data['delay_time'] = parsed_delay_time
+                            else:
+                                mapping_notes.append(f"AI suggested non-positive delay_time '{delay_time_raw}'. Please enter a positive number.")
                         except (ValueError, TypeError):
-                            print(f"AI suggested invalid delay_time format for '{workflow_data['name']}': {delay_time_raw}. Skipping delay.")
-                            # Decide if this makes the suggestion invalid or just removes delay
-                            # For now, remove delay if format is wrong for a scheduled task
-                            if rule_type == 'scheduled': 
-                                print("Cannot save scheduled task with invalid delay time. Skipping suggestion")
-                                continue
-                            workflow_data['delay_time'] = None # Or set to 0 if rule_type is immediate
-                    
-                    delay_unit_raw = suggestion.get('delay_unit')
-                    if delay_unit_raw is not None:
-                         workflow_data['delay_unit'] = delay_unit_raw
-
-                    # Additional validation for scheduled type
-                    if rule_type == 'scheduled':
-                        dt = workflow_data.get('delay_time')
-                        du = workflow_data.get('delay_unit')
-                        if not (isinstance(dt, int) and dt > 0 and du in ['minutes', 'hours', 'days']):
-                            print(f"AI suggested invalid schedule parameters for '{workflow_data['name']}' (time: {dt}, unit: {du}). Skipping.")
-                            continue
-                    elif rule_type == 'immediate': # Ensure delay is None for immediate, as per model
-                        workflow_data['delay_time'] = None
-                        workflow_data['delay_unit'] = None
-                    
-                    serializer = WorkflowRuleSerializer(data=workflow_data, context={'request': request})
-                    if serializer.is_valid():
-                        workflow_instance = serializer.save()
-                        created_workflows_instances.append(workflow_instance)
+                            mapping_notes.append(f"AI suggested invalid delay_time format '{delay_time_raw}'. Please enter a number.")
                     else:
-                        print(f"Serializer errors for AI suggestion '{workflow_data.get('name')}': {serializer.errors}")
-                        # Optionally, collect these errors to return to frontend later
+                        mapping_notes.append("Scheduled rule type chosen by AI, but no delay_time provided. Please specify.")
+                    
+                    if delay_unit_raw and delay_unit_raw in [choice[0] for choice in WorkflowRule.DELAY_UNIT_CHOICES]:
+                        mapped_suggestion_data['delay_unit'] = delay_unit_raw
+                    elif delay_unit_raw: # It was provided but invalid
+                        mapping_notes.append(f"AI suggested invalid delay_unit '{delay_unit_raw}'. Please select a valid unit.")
+                    else: # Not provided for scheduled
+                         mapping_notes.append("Scheduled rule type chosen by AI, but no delay_unit provided. Please specify.")
+                elif mapped_suggestion_data['rule_type'] == 'immediate':
+                    mapped_suggestion_data['delay_time'] = None
+                    mapped_suggestion_data['delay_unit'] = None
+                else: # Invalid rule_type
+                    mapping_notes.append(f"AI suggested an invalid rule_type: '{mapped_suggestion_data['rule_type']}'. Please select 'immediate' or 'scheduled'.")
+                    mapped_suggestion_data['rule_type'] = None # Nullify if invalid
 
-                except Exception as e:
-                    import traceback
-                    print(f"Error processing one AI suggestion: {str(e)}. Suggestion: {suggestion}")
-                    print(f"Traceback: {traceback.format_exc()}")
-                    continue # Skip this suggestion and try the next
-
-            response_payload = {}
-            if created_workflows_instances:
-                final_serializer = WorkflowRuleSerializer(created_workflows_instances, many=True)
-                response_payload['created_workflows'] = final_serializer.data
-                status_code = status.HTTP_201_CREATED
-            else:
-                status_code = status.HTTP_200_OK # Or 400 if AI errors were the only thing
-
-            if ai_errors_list: # Include AI-reported errors in the response
-                response_payload['ai_reported_errors'] = ai_errors_list
-                if not created_workflows_instances: # If only errors, maybe it's not a success status
-                     status_code = status.HTTP_400_BAD_REQUEST 
-                     if 'message' not in response_payload: response_payload['message'] = "AI reported errors and no workflows could be created."
+                preview_suggestions_for_frontend.append({
+                    "original_ai_suggestion": raw_suggestion,
+                    "mapped_suggestion": mapped_suggestion_data,
+                    "mapping_notes": mapping_notes
+                })
             
-            if not created_workflows_instances and not ai_errors_list:
-                response_payload['message'] = "No valid workflows were generated from the AI suggestions, or AI returned no suggestions."
-                # Status code remains 200 if AI just returned empty suggestions without errors.
-
-            return Response(response_payload, status=status_code)
+            final_response_message = f"AI returned {len(raw_ai_suggestions)} suggestion(s)."
+            if ai_global_errors:
+                final_response_message += f" AI also reported {len(ai_global_errors)} global issue(s)."
+            
+            return Response({
+                "preview_workflows": preview_suggestions_for_frontend,
+                "ai_reported_errors": ai_global_errors,
+                "message": final_response_message
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            # Catch-all for other unexpected errors during the process
             import traceback
             print(f"General error in AI workflow generation process: {str(e)}")
             print(f"Traceback: {traceback.format_exc()}")
-            return Response({"error": f"An unexpected error occurred on the server: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": f"An unexpected error occurred on the server while processing AI suggestions: {str(e)}"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # New action for simulating triggers
     @action(detail=False, methods=['post'], url_path='simulate-trigger')
@@ -277,6 +260,27 @@ class WorkflowRuleViewSet(viewsets.ModelViewSet):
     #     # You might want to return the suggested rule for confirmation, 
     #     # or even a serialized (but not saved) WorkflowRule instance.
     #     return Response(suggested_rule, status=status.HTTP_200_OK)
+
+@csrf_exempt # For simplicity; production should use proper auth
+@require_POST # Ensure this endpoint is called via POST by Cloud Scheduler
+def run_scheduled_tasks_view(request):
+    """
+    An HTTP endpoint to trigger the process_scheduled_workflows command.
+    Cloud Scheduler will call this endpoint.
+    """
+    try:
+        # It's good practice to capture the output if needed, though call_command prints to stdout/stderr
+        # from io import StringIO
+        # out = StringIO()
+        # call_command('process_scheduled_workflows', stdout=out, stderr=out)
+        # command_output = out.getvalue()
+        
+        call_command('process_scheduled_workflows')
+        
+        return JsonResponse({"status": "success", "message": "Scheduled tasks processing command triggered."})
+    except Exception as e:
+        # Log the exception e
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 class WorkflowExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     """
