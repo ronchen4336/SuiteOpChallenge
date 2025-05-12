@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Q
 from .models import Trigger, Action, WorkflowRule, WorkflowExecutionLog
 
 class TriggerSerializer(serializers.ModelSerializer):
@@ -36,7 +37,10 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
 
     def get_execution_count(self, obj):
         # obj is the WorkflowRule instance
-        return obj.execution_logs.filter(status='EXECUTED').count()
+        # Count both actual scheduled executions and simulated immediate ones
+        return obj.execution_logs.filter(
+            Q(status='EXECUTED') | Q(status='SIMULATED_IMMEDIATE')
+        ).count()
 
     def validate(self, data):
         rule_type = data.get('rule_type')
