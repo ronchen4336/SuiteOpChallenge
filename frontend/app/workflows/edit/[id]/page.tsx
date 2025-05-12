@@ -93,9 +93,9 @@ export default function EditWorkflow() {
       setError(null)
       try {
         const [workflowResponse, triggersResponse, actionsResponse] = await Promise.all([
-          fetch(`http://127.0.0.1:8000/api/rules/${workflowId}/`),
-          fetch('http://127.0.0.1:8000/api/triggers/'),
-          fetch('http://127.0.0.1:8000/api/actions/') 
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/${workflowId}/`),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/triggers/`),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/actions/`)
         ])
 
         if (!workflowResponse.ok) {
@@ -167,7 +167,7 @@ export default function EditWorkflow() {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/rules/${workflowId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/${workflowId}/`, {
         method: 'PUT', // Or PATCH if you prefer partial updates
         headers: {
           'Content-Type': 'application/json',
@@ -195,7 +195,7 @@ export default function EditWorkflow() {
   const handleDeleteWorkflow = async () => {
     setIsSubmitting(true); 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/rules/${workflowId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/${workflowId}/`, {
         method: 'DELETE',
       });
 

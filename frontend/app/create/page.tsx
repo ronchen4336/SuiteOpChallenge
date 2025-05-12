@@ -73,8 +73,8 @@ export default function CreateWorkflow() {
       setErrorData(null);
       try {
         const [triggersResponse, actionsResponse] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/triggers/'),
-          fetch('http://127.0.0.1:8000/api/actions/') 
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/triggers/`),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/actions/`)
         ]);
 
         if (!triggersResponse.ok || !actionsResponse.ok) {
@@ -105,7 +105,7 @@ export default function CreateWorkflow() {
     setIsGenerating(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/rules/generate-from-ai/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/generate-from-ai/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +186,7 @@ export default function CreateWorkflow() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/rules/', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

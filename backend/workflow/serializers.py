@@ -20,8 +20,6 @@ class WorkflowRuleSerializer(serializers.ModelSerializer):
     action_id = serializers.PrimaryKeyRelatedField(
         queryset=Action.objects.all(), source='action', write_only=True
     )
-    # To include execution logs when a rule is fetched:
-    # execution_logs = WorkflowExecutionLogSerializer(many=True, read_only=True) # Forward declaration issue, define Log Serializer first or import carefully
 
     class Meta:
         model = WorkflowRule
@@ -59,7 +57,6 @@ class WorkflowRuleNameSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 class WorkflowExecutionLogSerializer(serializers.ModelSerializer):
-    # workflow_rule = WorkflowRuleSerializer(read_only=True) # This would nest the full rule, could be verbose
     workflow_rule = WorkflowRuleNameSerializer(read_only=True) # Use the lighter serializer
     workflow_rule_id = serializers.PrimaryKeyRelatedField(
         queryset=WorkflowRule.objects.all(), source='workflow_rule', write_only=True

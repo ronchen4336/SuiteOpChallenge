@@ -34,7 +34,7 @@ export default function RecentWorkflows() {
       setError(null);
       try {
         // Assuming your backend is running on port 8000
-        const response = await fetch('http://127.0.0.1:8000/api/rules/');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/`);
         if (!response.ok) {
           throw new Error(`Failed to fetch workflows: ${response.status}`);
         }

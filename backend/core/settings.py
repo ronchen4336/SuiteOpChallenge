@@ -16,13 +16,12 @@ from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
+print(f"DB_HOST after load_dotenv: {os.getenv('DB_HOST')}")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-hnkwo^h#uwnvi&eb^cn(aw&m4wc^%*alce*r8!wqtgtp$pyd^6"
@@ -30,8 +29,13 @@ SECRET_KEY = "django-insecure-hnkwo^h#uwnvi&eb^cn(aw&m4wc^%*alce*r8!wqtgtp$pyd^6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost', '127.0.0.1',
+    '.appspot.com',        # all App Engine sub-domains
+    '.run.app',            # every Cloud Run URL, incl. backend-35407…run.app
+]
 
+CORS_ALLOW_ALL_ORIGINS = True   # quick test
 
 # Application definition
 
@@ -49,8 +53,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -83,34 +88,22 @@ WSGI_APPLICATION = "core.wsgi.application"
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'mssql',
-        'NAME': os.getenv('DB_NAME', 'YOUR_DATABASE_NAME'),
-        'USER': os.getenv('DB_USER', 'YOUR_DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'YOUR_DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST', 'YOUR_AZURE_SQL_SERVER_NAME.database.windows.net'),
-        'PORT': os.getenv('DB_PORT', '1433'),
-        'OPTIONS': {
-            'driver': os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server'),
-            'encrypt': True, # Recommended for Azure SQL
-            'trust_server_certificate': False, # Recommended for Azure SQL
-            # 'connection_timeout': 30, # Optional
+    "default": {
+        "ENGINE": "mssql",
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST"),
+        "PORT": os.getenv("DB_PORT", "1433"),
+        "OPTIONS": {
+            "driver": "ODBC Driver 18 for SQL Server",
+            "encrypt": True,                   # Azure requires this
+            "trust_server_certificate": False, # Align with Azure ODBC example
         },
     }
 }
+print(f"DB_HOST in DATABASES config: {DATABASES['default']['HOST']}")
 
-# If you want to keep SQLite for local development sometimes, you can do this:
-# if os.getenv('USE_AZURE_SQL') == 'TRUE':
-#     DATABASES['default'] = { ... Azure SQL config ... }
-# else:
-#     DATABASES['default'] = {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-
-
-# Password validation
-# https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -140,10 +133,15 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Simplified static files storage for App Engine with WhiteNoise
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -152,11 +150,23 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Your Next.js frontend development URL
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
-]
-# Alternatively, for development, you can use:
-# CORS_ALLOW_ALL_ORIGINS = True
-# Or more granularly:
-# CORS_ALLOW_CREDENTIALS = True # If you use credentials
-# CSRF_TRUSTED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'] # If you face CSRF issues with POST/PUT
+    "https://suite-op-459500.ue.r.appspot.com",
+    "https://frontend-dot-suite-op-459500.ue.r.appspot.com/"
+]   
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}

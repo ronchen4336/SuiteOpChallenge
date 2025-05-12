@@ -26,7 +26,7 @@ export default function TriggerSimulatorPage() { // Renamed component
       setIsLoadingTriggers(true);
       setErrorTriggers(null);
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/triggers/"); // Fetch triggers
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/triggers/`); // Fetch triggers
         if (!response.ok) {
           throw new Error(`Failed to fetch triggers: ${response.status}`);
         }
@@ -45,7 +45,7 @@ export default function TriggerSimulatorPage() { // Renamed component
 
   const handleSimulateTrigger = async (triggerId: number | string) => {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/rules/simulate-trigger/", { // New endpoint
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/simulate-trigger/`, { // New endpoint
         method: "POST",
         headers: {
           "Content-Type": "application/json",

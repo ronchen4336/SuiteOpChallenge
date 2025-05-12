@@ -37,7 +37,7 @@ export default function WorkflowLogDisplay() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/workflow-logs/");
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/workflow-logs/`);
         if (!response.ok) {
           throw new Error(`Failed to fetch logs: ${response.status}`);
         }

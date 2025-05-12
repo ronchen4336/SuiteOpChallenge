@@ -2,3 +2,4 @@
 /backend/core/__pycache__
 /backend/workflow/__pycache__
 backend/.env
+/backend/staticfiles

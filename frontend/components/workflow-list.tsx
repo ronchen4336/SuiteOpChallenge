@@ -54,7 +54,7 @@ export default function WorkflowList({ filterActive, searchTerm, filterType, fil
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/rules/');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/`);
         if (!response.ok) {
           throw new Error(`Failed to fetch workflows: ${response.status}`);
         }
@@ -80,7 +80,7 @@ export default function WorkflowList({ filterActive, searchTerm, filterType, fil
     );
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/rules/${workflowId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/${workflowId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +117,7 @@ export default function WorkflowList({ filterActive, searchTerm, filterType, fil
     setAllFetchedWorkflows(prevWorkflows => prevWorkflows.filter(wf => wf.id !== workflowId));
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/rules/${workflowId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/${workflowId}/`, {
         method: 'DELETE',
       });
 

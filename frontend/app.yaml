@@ -1,0 +1,11 @@
+service: frontend
+runtime: nodejs20
+
+instance_class: F1
+env_variables:
+  NODE_ENV: "production"
+  NEXT_PUBLIC_API_URL: "https://backend-dot-suite-op-459500.ue.r.appspot.com/api"
+handlers:
+  - url: /.*
+    script: auto          # Uses the "start" script in package.json
+    secure: always        # HTTPS redirect on App Engine standard

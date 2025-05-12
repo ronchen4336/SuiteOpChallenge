@@ -51,10 +51,6 @@ class WorkflowExecutionLog(models.Model):
         ('SIMULATED_IMMEDIATE', 'Simulated Immediate Execution'),
         ('SIMULATED_SCHEDULED', 'Simulated Scheduled for Later'),
         ('SIMULATION_ERROR', 'Error During Simulation'),
-        # Future statuses for real execution:
-        # ('PENDING', 'Pending Scheduled Execution'),
-        # ('EXECUTED', 'Executed via Scheduler'),
-        # ('ERROR', 'Error During Execution'),
     ]
 
     workflow_rule = models.ForeignKey(WorkflowRule, on_delete=models.CASCADE, related_name='execution_logs')

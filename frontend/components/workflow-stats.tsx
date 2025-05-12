@@ -33,7 +33,7 @@ export default function WorkflowStats() {
 
       try {
         // Fetch workflow rules for general stats
-        const rulesResponse = await fetch('http://127.0.0.1:8000/api/rules/');
+        const rulesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/rules/`);
         if (!rulesResponse.ok) {
           throw new Error(`Failed to fetch workflow rules: ${rulesResponse.status}`);
         }
@@ -45,7 +45,7 @@ export default function WorkflowStats() {
         setScheduledActions(rules.filter(rule => rule.rule_type === 'scheduled' && rule.is_active).length);
 
         // Fetch workflow execution logs for "Executions Today"
-        const logsResponse = await fetch('http://127.0.0.1:8000/api/workflow-logs/');
+        const logsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/workflow-logs/`);
         if (!logsResponse.ok) {
           throw new Error(`Failed to fetch workflow logs: ${logsResponse.status}`);
         }

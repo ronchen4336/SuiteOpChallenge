@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.git/
+.gitignore
+venv/
+db.sqlite3
+*.sqlite3 # Ignore any sqlite databases
+*.log
+
+# Frontend directory, if it happens to be copied or symlinked inside backend
+frontend/
+
+# Local development settings files that shouldn't be deployed
+local_settings.py
+.env 
